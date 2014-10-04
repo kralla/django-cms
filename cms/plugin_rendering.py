@@ -87,10 +87,15 @@ def render_plugins(plugins, context, placeholder, processors=None):
     return out
 
 
-def render_placeholder(placeholder, context_to_copy, name_fallback="Placeholder", lang=None, default=None):
+def render_placeholder(placeholder, context_to_copy,
+        name_fallback="Placeholder", lang=None, default=None, editable=True):
     """
     Renders plugins for a placeholder on the given page using shallow copies of the
     given context, and returns a string containing the rendered output.
+
+    Set editable = False to disable front-end editing for this placeholder
+    during rendering. This is primarily used for the "as" variant of the
+    render_placeholder tag.
     """
     if not placeholder:
         return
@@ -113,17 +118,14 @@ def render_placeholder(placeholder, context_to_copy, name_fallback="Placeholder"
         save_language = lang
 
     # Prepend frontedit toolbar output if applicable
-    edit = False
     toolbar = getattr(request, 'toolbar', None)
-
-    if getattr(toolbar, 'edit_mode', False):
-        edit = True
-    if edit:
+    if getattr(toolbar, 'edit_mode', False) and getattr(placeholder, 'is_editable', True) and editable:
         from cms.middleware.toolbar import toolbar_plugin_processor
-
         processors = (toolbar_plugin_processor,)
+        edit = True
     else:
         processors = None
+        edit = False
     from django.core.cache import cache
     if get_cms_setting('PLACEHOLDER_CACHE'):
         cache_key = placeholder.get_cache_key(lang)
@@ -156,12 +158,11 @@ def render_placeholder(placeholder, context_to_copy, name_fallback="Placeholder"
     content.extend(render_plugins(plugins, context, placeholder, processors))
     toolbar_content = ''
 
-    if edit:
+    if edit and editable:
         if not hasattr(request.toolbar, 'placeholders'):
             request.toolbar.placeholders = {}
         if placeholder.pk not in request.toolbar.placeholders:
             request.toolbar.placeholders[placeholder.pk] = placeholder
-    if edit:
         toolbar_content = mark_safe(render_placeholder_toolbar(placeholder, context, name_fallback, save_language))
     if content:
         content = mark_safe("".join(content))
